@@ -198,16 +198,3 @@ class ToTensor(object):
         image = torch.from_numpy(image).float()
         return image
 
-
-class ToTensor_(object):
-    """Convert ndarrays in image to Tensors."""
-
-    def __call__(self, image):
-
-        # swap color axis because
-        # numpy image: H x W x C
-        # torch image: C x H x W
-        image = image.transpose((2, 0, 1))
-        
-        image = torch.from_numpy(image).float()
-        return image

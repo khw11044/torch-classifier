@@ -7,6 +7,7 @@ from torch.utils.data import Dataset, DataLoader
 import torch
 from torchvision import transforms
 from transform import *
+import pandas as pd
 
 class TestDataset(Dataset):
     def __init__(self, path='./dataset/test', mode='test', transform=None):
@@ -43,22 +44,17 @@ class TestDataset(Dataset):
         
         
 
+
 class MyDataset(Dataset):
-    def __init__(self, path='./dataset/train', mode='train', classes=None, transform=None):
+    def __init__(self, root='../open', mode='train', classes=None, transform=None):
         super(MyDataset, self).__init__()
         if classes is None:
             raise Exception('needed classes')
-        
-        data_path = []
-        for cls in classes:
-            cls_img_path = glob.glob(os.path.join(path, cls) + '/*')
-            DATA_LEN = int(len(cls_img_path)*0.9)
-            if mode=='train':
-                data_path += cls_img_path[:DATA_LEN+1]
-            else:
-                data_path += cls_img_path[DATA_LEN:]
-       
-    
+
+
+        data_csv = pd.read_csv(root + '/train.csv')
+        # classes = sorted(list(set(data_csv['label'].unique())))
+        TOTAL_LEN = len(data_csv)
         self.mode = mode
         self.labels = []
         self.images = []
@@ -66,38 +62,47 @@ class MyDataset(Dataset):
         for i, cls in enumerate(classes):
             self.index_labels[cls]=i
         
-        for line in data_path:
-            image_path = line
-            label = line.split('/')[-2]
-            self.images.append(image_path)
+        
+        for i in range(TOTAL_LEN):
+            image_path1 = '.'.join(data_csv.loc[i]['img_path'].split('.')[1:])
+            image_path2 = '.'.join(data_csv.loc[i]['upscale_img_path'].split('.')[1:])
+            label = data_csv.loc[i]['label']
+            
+            image_path1 = root + image_path1
+            image_path2 = root + image_path2
+            
+            self.images.append(image_path1)
             self.labels.append(label)
             
-        self.transform = transform                                             
+            self.images.append(image_path2)
+            self.labels.append(label)
+        
+        self.transform = transform
 
     def __len__(self):
         return len(self.images)
 
     def __getitem__(self, idx):
-        
+
         img, label = self.images[idx], self.labels[idx]
         img = self.read_image(img)
         label = self.convert_label(label)
-        
-        # sample = {'image': img, 'label': label}     
-        
+
+        # sample = {'image': img, 'label': label}
+
         if self.transform:
             img = self.transform(img)
 
         return img, label   # torch.Size([3, 224, 224])
-    
+
     def read_image(self, img):
         img = cv2.imread(img, cv2.IMREAD_COLOR)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         return img
-    
+
     def convert_label(self, label):
         return self.index_labels[label]
-    
+
     def get_class_weights(self):
         weights = [0 for _ in range(len(self.index_labels))]
         for label in self.labels:
@@ -107,6 +112,73 @@ class MyDataset(Dataset):
         weights = 1.0 / weights
         weights = weights / weights.sum()
         return weights
+
+
+class TestDataset(Dataset):
+    def __init__(self, root='../open', mode='test', transform=None):
+        super(TestDataset, self).__init__()
+
+        data_csv = pd.read_csv(root + '/test.csv')
+
+        TOTAL_LEN = len(data_csv)
+        self.mode = mode
+        self.images = []
+
+        
+        for i in range(TOTAL_LEN):
+            image_path1 = '.'.join(data_csv.loc[i]['img_path'].split('.')[1:])
+            image_path1 = root + image_path1
+            self.images.append(image_path1)
+            
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+
+        img= self.images[idx]
+        img = self.read_image(img)
+
+        # sample = {'image': img, 'label': label}
+
+        if self.transform:
+            img = self.transform(img)
+
+        return img   # torch.Size([3, 224, 224])
+
+    def read_image(self, img):
+        img = cv2.imread(img, cv2.IMREAD_COLOR)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        return img
+
+    def get_class_weights(self):
+        weights = [0 for _ in range(len(self.index_labels))]
+        for label in self.labels:
+            weights[self.index_labels[label]]+=1
+        weights = np.array(weights)
+        weights = weights / weights.sum()
+        weights = 1.0 / weights
+        weights = weights / weights.sum()
+        return weights
+
+
+def calculate_norm(dataset):
+    # dataset의 axis=1, 2에 대한 평균 산출
+    mean_ = np.array([np.mean(x.numpy(), axis=(1, 2)) for x, _ in dataset])
+    # r, g, b 채널에 대한 각각의 평균 산출
+    mean_r = mean_[:, 0].mean()
+    mean_g = mean_[:, 1].mean()
+    mean_b = mean_[:, 2].mean()
+
+    # dataset의 axis=1, 2에 대한 표준편차 산출
+    std_ = np.array([np.std(x.numpy(), axis=(1, 2)) for x, _ in dataset])
+    # r, g, b 채널에 대한 각각의 표준편차 산출
+    std_r = std_[:, 0].mean()
+    std_g = std_[:, 1].mean()
+    std_b = std_[:, 2].mean()
+    
+    return (mean_r, mean_g, mean_b), (std_r, std_g, std_b)
 
 
 def mean_std(train_dataloader):

@@ -4,24 +4,41 @@ import torch
 import cv2
 import matplotlib.pyplot as plt
 
-def result_save(epochs,train_loss_list,val_loss_list,scores_list):
-    plt.figure(figsize=(10,20))
+def result_save(save_path, epoch, train_epochs,vaild_epochs, train_loss_list,val_loss_list,train_f1scores_list, val_scores_list):
+    plt.figure(figsize=(12,6))
 
-    plt.subplot(1, 2, 1)   
-    plt.plot(epochs,train_loss_list,label='training_loss')
-    plt.plot(epochs,val_loss_list, label='vaildation_loss')
+    plt.subplot(1, 2, 1)
+    plt.plot(train_epochs,train_loss_list,label='training_loss')
+    plt.plot(vaild_epochs,val_loss_list, label='vaildation_loss')
     plt.xlabel('epochs')
     plt.ylabel('loss')
     plt.legend()
-    plt.savefig('../result/loss.png')
 
-    plt.subplot(1, 2, 2)   
-    plt.plot(epochs,scores_list,label='vaild_accuracy')
+    plt.subplot(1, 2, 2)
+    plt.plot(train_epochs,train_f1scores_list,label='train_F1')
+    plt.plot(vaild_epochs,val_scores_list,label='vaild_F1')
     plt.xlabel('epochs')
-    plt.ylabel('accuracy')
+    plt.ylabel('F1 score')
     plt.legend()
-    plt.savefig('../result/accuracy.png')
+    plt.savefig(save_path + '/F1_score_{}.png'.format(int(epoch)))
 
+def get_classes(train_path, test_path):
+    classes = set()
+
+    total_train_num = 0
+    total_test_num = 0
+    for label in os.listdir(train_path):
+        classes.add(label)
+        image_num = len(os.listdir(os.path.join(train_path,label)))
+        total_train_num += image_num
+        print('train dataset size : {} -> {}'.format(label,image_num))
+    for label in os.listdir(test_path):
+        image_num = len(os.listdir(os.path.join(test_path,label)))
+        total_test_num += image_num
+        print('test dataset size : {} -> {}'.format(label,image_num))
+    print()
+    print('total train dataset : {} \t total vail dataset : {} \t total test dataset : {}'.format(total_train_num*0.9, total_train_num*0.1, total_test_num))      
+    return classes
 
 def train_validation_split(train_csv_path, validation_csv_path, split_ratio, train_path = '../train'):
     train_csv = csv.writer(open(train_csv_path, 'w', encoding='utf-8-sig', newline=''))

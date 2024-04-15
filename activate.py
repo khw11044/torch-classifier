@@ -5,12 +5,12 @@ import numpy as np
 
 from tqdm import tqdm
 
-def train(model, train_dataloader, criterion, optimizer, device):
+def train(model, dataloader, criterion, optimizer, device):
     model.train()
+    total_loss, train_correct, train_total = 0, 0, 0
     preds = []
     targets = []
-    running_loss = 0
-    for step, (inputs, labels) in enumerate(tqdm(train_dataloader)):
+    for step, (inputs, labels) in enumerate(tqdm(dataloader, desc='Training')):
         inputs = inputs.to(device)
         labels = labels.to(device)
         outputs = model(inputs)
@@ -21,55 +21,96 @@ def train(model, train_dataloader, criterion, optimizer, device):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        running_loss += loss.item()
+        total_loss += loss.item()
 
-        with torch.no_grad():
-            pred = torch.softmax(outputs, dim=1).detach().squeeze().cpu().numpy()
-            target = labels.detach().cpu().numpy()
-            for p,t in zip(pred, target):
-                preds.append(np.argmax(p))
-                targets.append(t)
-    score = f1_score(np.array(targets), np.array(preds), average='macro')
-    print("train Loss : {}, score : {}".format(running_loss/len(train_dataloader), score))
+
+        train_total += labels.size(0)
+        pred = torch.argmax(outputs, dim=1).cpu().numpy()
+        labels = labels.detach().cpu().numpy()
+        train_correct += ((pred==labels)).sum().item()
+        
+        for p,t in zip(pred, labels):
+            preds.append(p)
+            targets.append(t)
+            
+    f1score = f1_score(np.array(targets), np.array(preds), average='macro') * 100
+    train_avg_loss = total_loss / len(dataloader)
+    train_avg_accuracy = (train_correct / train_total) * 100
+
+    print("Train Loss : {:.6f}, acc : {:.2f}, f1 : {:.2f}".format(train_avg_loss, train_avg_accuracy, f1score))
     
-    return running_loss/len(train_dataloader), score
+    return train_avg_loss, train_avg_accuracy, f1score
 
-def validation(model, validation_dataloader, criterion, optimizer, device):
+def validation(model, dataloader, criterion, device):
     model.eval()
+    total_loss, vaild_correct, vaild_total = 0, 0, 0
     preds = []
     targets = []
-    running_loss = 0
     with torch.no_grad():
-        for step, (inputs, labels) in enumerate(tqdm(validation_dataloader)):
+        for step, (inputs, labels) in enumerate(tqdm(dataloader, desc='Vaildation')):
             inputs = inputs.to(device)
             labels = labels.to(device)
             outputs = model(inputs)
 
             loss = criterion(outputs, labels)
 
-            running_loss += loss.item()
+            total_loss += loss.item()
 
-            pred = torch.softmax(outputs, dim=1).detach().squeeze().cpu().numpy()
-            target = labels.detach().cpu().numpy()
-            for p,t in zip(pred, target):
-                preds.append(np.argmax(p))
+            vaild_total += labels.size(0)
+            pred = torch.argmax(outputs, dim=1).cpu().numpy()
+            labels = labels.detach().cpu().numpy()
+            vaild_correct += ((pred==labels)).sum().item()
+            
+            for p,t in zip(pred, labels):
+                preds.append(p)
                 targets.append(t)
-    score = f1_score(np.array(targets), np.array(preds), average='macro')
-    print("validation Loss : {}, score : {}".format(running_loss/len(validation_dataloader), score))
-    return running_loss/len(validation_dataloader), score
+                
+    f1score = f1_score(np.array(targets), np.array(preds), average='macro') * 100
+    vaild_avg_loss = total_loss / len(dataloader)
+    vaild_avg_accuracy = (vaild_correct / vaild_total) * 100
+    print("Vaild Loss : {:.6f}, acc : {:.2f}, f1 : {:.2f}".format(vaild_avg_loss, vaild_avg_accuracy, f1score))
+    return vaild_avg_loss, vaild_avg_accuracy, f1score
 
-def test(model, test_dataloader, criterion, optimizer, device):
+def test(model, dataloader, device):
     model.eval()
+    test_correct, test_total = 0, 0
     preds = []
+    targets = []
     with torch.no_grad():
-        for step, inputs in enumerate(tqdm(test_dataloader)):
+        for step, (inputs, labels) in enumerate(tqdm(dataloader, desc='Test')):
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+            outputs = model(inputs)
+            
+            test_total += labels.size(0)
+            pred = torch.argmax(outputs, dim=1).cpu().numpy()
+            labels = labels.detach().cpu().numpy()
+            test_correct += ((pred==labels)).sum().item()
+            
+            for p,t in zip(pred, labels):
+                preds.append(p)
+                targets.append(t)
+                
+        f1score = f1_score(np.array(targets), np.array(preds), average='macro') * 100
+
+        test_avg_accuracy = (test_correct / test_total) * 100
+        print("Acc : {:.2f}, f1 : {:.2f}".format(test_avg_accuracy, f1score))
+    
+    return test_avg_accuracy, f1score
+
+def demo(model, dataloader, device):
+    model.eval()
+
+    preds = []
+
+    with torch.no_grad():
+        for step, inputs in enumerate(tqdm(dataloader, desc='Demo')):
             inputs = inputs.to(device)
             outputs = model(inputs)
-            pred = torch.softmax(outputs, dim=1).detach().squeeze().cpu().numpy()
-            if len(pred.shape)==1:
-                preds.append(pred.argmax())
-            else:
-                for p in pred:
-                    preds.append(np.argmax(p))
-
+            
+            pred = torch.argmax(outputs, dim=1).cpu().numpy()
+            
+            for p in pred:
+                preds.append(p)
+                
     return preds
